@@ -2329,6 +2329,7 @@ export default function DispatchScreen() {
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<JobDetail | null>(null);
   const [showAddOrderModal, setShowAddOrderModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -2643,6 +2644,17 @@ export default function DispatchScreen() {
   const filteredAndSortedOrders = useMemo(() => {
     let filtered = [...ordersData];
     
+    // 添加搜索过滤
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(order => 
+        (order.mawb || '').toLowerCase().includes(query) ||
+        (order.hawb || '').toLowerCase().includes(query) ||
+        order.companyName.toLowerCase().includes(query)
+        // 如果有 manifest 字段，也添加到这里
+      );
+    }
+    
     // Apply district filter
     if (selectedDistrict) {
       filtered = filtered.filter(order => order.district === selectedDistrict);
@@ -2665,7 +2677,7 @@ export default function DispatchScreen() {
     }
     
     return filtered;
-  }, [ordersData, selectedDistrict, selectedTimeRange, orderSort]);
+  }, [ordersData, selectedDistrict, selectedTimeRange, orderSort, searchQuery]); // 添加 searchQuery 依赖
 
   // Group orders by district
   const groupedOrders = useMemo(() => {
@@ -2863,7 +2875,7 @@ export default function DispatchScreen() {
       }
     >
       <View style={[styles.container, { paddingTop: 0 }]}>
-        <View style={[styles.leftPanel, { width: '12%' }]}>
+        <View style={[styles.leftPanel, { width: '18%' }]}>
           <View style={[styles.containerTitleRow, styles.leftPanelTitle]}>
             <View style={styles.titleContainer}>
               <MaterialCommunityIcons name="truck-delivery" size={20} color="#1976D2" />
@@ -3066,8 +3078,30 @@ export default function DispatchScreen() {
             <View style={[styles.containerTitleRow, styles.rightPanelTitle]}>
               <View style={styles.titleContainer}>
                 <MaterialCommunityIcons name="package-variant" size={20} color="#1976D2" />
-              <Text style={styles.containerTitle}>Orders Queue</Text>
+                <Text style={styles.containerTitle}>Orders Queue</Text>
               </View>
+              
+              {/* 添加搜索过滤器组 */}
+              <View style={styles.searchFilterContainer}>
+                <View style={styles.searchInputContainer}>
+                  <MaterialCommunityIcons name="magnify" size={20} color="#666" />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search MAWB/HAWB/Customer..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity
+                      style={styles.clearSearchButton}
+                      onPress={() => setSearchQuery('')}
+                    >
+                      <MaterialCommunityIcons name="close" size={16} color="#666" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+
               <View style={styles.filterContainer}>
                 <TouchableOpacity
                   style={styles.viewModeButton}
@@ -3552,7 +3586,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   leftPanel: {
-    width: '14.28%',
+    width: '18%',  // 从 12% 改为 14%
     backgroundColor: '#FFF',
     borderRadius: 8,
     borderWidth: 1,
@@ -5894,5 +5928,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F44336',
     zIndex: 100,
+  },
+  searchFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginRight: 20,
+  },
+  
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: 280,
+    gap: 8,
+  },
+  
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    padding: 0,
+    height: 24,
+  },
+  
+  clearSearchButton: {
+    padding: 2,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
   },
 }); 
