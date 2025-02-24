@@ -11,7 +11,7 @@ interface CrewMember {
   phone: string;
   email: string;
   joinedDate: string;
-  isArmoredCertified: boolean;
+  isGunCertified: boolean;
   status: 'Active' | 'On Leave' | 'Inactive';
   avatar?: string;
   skills: string[];
@@ -97,10 +97,10 @@ export default function CrewDetails({ member, onEdit }: CrewDetailsProps) {
         </View>
 
         <View style={styles.skillsContainer}>
-          {member.isArmoredCertified && (
+          {member.isGunCertified && (
             <View style={styles.certificationBadge}>
               <MaterialCommunityIcons name="shield-check" size={16} color="#1976D2" />
-              <Text style={styles.certificationText}>Armored Certified</Text>
+              <Text style={styles.certificationText}>Gun Certified</Text>
             </View>
           )}
           {member.skills.map((skill, index) => (

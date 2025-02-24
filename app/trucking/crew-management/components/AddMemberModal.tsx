@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import { Text } from '@/components/Themed';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,9 +8,15 @@ interface AddMemberModalProps {
   visible: boolean;
   onClose: () => void;
   onSave: (member: Omit<CrewMember, 'id'>) => void;
+  initialData?: CrewMember | null;
 }
 
-export default function AddMemberModal({ visible, onClose, onSave }: AddMemberModalProps) {
+export default function AddMemberModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  initialData 
+}: AddMemberModalProps) {
   const [formData, setFormData] = useState({
     staffId: '',
     name: '',
@@ -18,7 +24,7 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
     phone: '',
     email: '',
     joinedDate: new Date().toISOString().split('T')[0],
-    isArmoredCertified: false,
+    isGunCertified: false,
     skills: [] as string[],
     documents: [] as CrewMember['documents']
   });
@@ -30,6 +36,22 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
     number: '',
     expiryDate: ''
   });
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        staffId: initialData.staffId,
+        name: initialData.name,
+        type: initialData.type,
+        phone: initialData.phone,
+        email: initialData.email,
+        joinedDate: initialData.joinedDate,
+        isGunCertified: initialData.isGunCertified,
+        skills: [...initialData.skills],
+        documents: [...initialData.documents]
+      });
+    }
+  }, [initialData]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -73,7 +95,7 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
       phone: '',
       email: '',
       joinedDate: new Date().toISOString().split('T')[0],
-      isArmoredCertified: false,
+      isGunCertified: false,
       skills: [],
       documents: []
     });
@@ -127,7 +149,9 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add New Member</Text>
+            <Text style={styles.modalTitle}>
+              {initialData ? 'Edit Member' : 'Add New Member'}
+            </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={24} color="#666" />
             </TouchableOpacity>
@@ -165,7 +189,7 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Position</Text>
                 <View style={styles.typeSelector}>
-                  {(['Leader', 'Driver', 'Guard'] as const).map(type => (
+                  {(['Senior Crew Leader', 'Leader', 'Driver', 'Guard'] as const).map(type => (
                     <TouchableOpacity
                       key={type}
                       style={[
@@ -228,15 +252,15 @@ export default function AddMemberModal({ visible, onClose, onSave }: AddMemberMo
                   style={styles.checkbox}
                   onPress={() => setFormData(prev => ({ 
                     ...prev, 
-                    isArmoredCertified: !prev.isArmoredCertified 
+                    isGunCertified: !prev.isGunCertified 
                   }))}
                 >
                   <MaterialCommunityIcons
-                    name={formData.isArmoredCertified ? "checkbox-marked" : "checkbox-blank-outline"}
+                    name={formData.isGunCertified ? "checkbox-marked" : "checkbox-blank-outline"}
                     size={24}
-                    color={formData.isArmoredCertified ? "#1976D2" : "#666"}
+                    color={formData.isGunCertified ? "#1976D2" : "#666"}
                   />
-                  <Text style={styles.checkboxLabel}>Armored Vehicle Certified</Text>
+                  <Text style={styles.checkboxLabel}>Gun License</Text>
                 </TouchableOpacity>
               </View>
             </View>

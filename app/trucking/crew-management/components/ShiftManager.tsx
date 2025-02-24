@@ -33,60 +33,81 @@ const COLORS = [
 
 const TimePickerCustom = ({ 
   value, 
-  onChange 
+  onChange,
+  onConfirm,
+  onCancel
 }: { 
   value: { hours: number; minutes: number }; 
   onChange: (value: { hours: number; minutes: number }) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
 }) => {
   return (
-    <View style={styles.timePickerCustom}>
-      <View style={styles.timePickerSection}>
-        <TouchableOpacity
-          style={styles.timeButton}
-          onPress={() => onChange({ 
-            ...value, 
-            hours: (value.hours + 1) % 24 
-          })}
-        >
-          <MaterialCommunityIcons name="chevron-up" size={24} color="#666" />
-        </TouchableOpacity>
-        <Text style={styles.timeValue}>
-          {value.hours.toString().padStart(2, '0')}
-        </Text>
-        <TouchableOpacity
-          style={styles.timeButton}
-          onPress={() => onChange({ 
-            ...value, 
-            hours: (value.hours - 1 + 24) % 24 
-          })}
-        >
-          <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
-        </TouchableOpacity>
+    <View>
+      <View style={styles.timePickerCustom}>
+        <View style={styles.timePickerSection}>
+          <TouchableOpacity
+            style={styles.timeButton}
+            onPress={() => onChange({ 
+              ...value, 
+              hours: (value.hours + 1) % 24 
+            })}
+          >
+            <MaterialCommunityIcons name="chevron-up" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.timeValue}>
+            {value.hours.toString().padStart(2, '0')}
+          </Text>
+          <TouchableOpacity
+            style={styles.timeButton}
+            onPress={() => onChange({ 
+              ...value, 
+              hours: (value.hours - 1 + 24) % 24 
+            })}
+          >
+            <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+        
+        <Text style={styles.timeSeparator}>:</Text>
+        
+        <View style={styles.timePickerSection}>
+          <TouchableOpacity
+            style={styles.timeButton}
+            onPress={() => onChange({ 
+              ...value, 
+              minutes: (value.minutes + 15) % 60 
+            })}
+          >
+            <MaterialCommunityIcons name="chevron-up" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.timeValue}>
+            {value.minutes.toString().padStart(2, '0')}
+          </Text>
+          <TouchableOpacity
+            style={styles.timeButton}
+            onPress={() => onChange({ 
+              ...value, 
+              minutes: (value.minutes - 15 + 60) % 60 
+            })}
+          >
+            <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
       </View>
       
-      <Text style={styles.timeSeparator}>:</Text>
-      
-      <View style={styles.timePickerSection}>
+      <View style={styles.timePickerActions}>
         <TouchableOpacity
-          style={styles.timeButton}
-          onPress={() => onChange({ 
-            ...value, 
-            minutes: (value.minutes + 15) % 60 
-          })}
+          style={[styles.button, styles.cancelButton]}
+          onPress={onCancel}
         >
-          <MaterialCommunityIcons name="chevron-up" size={24} color="#666" />
+          <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.timeValue}>
-          {value.minutes.toString().padStart(2, '0')}
-        </Text>
         <TouchableOpacity
-          style={styles.timeButton}
-          onPress={() => onChange({ 
-            ...value, 
-            minutes: (value.minutes - 15 + 60) % 60 
-          })}
+          style={[styles.button, styles.saveButton]}
+          onPress={onConfirm}
         >
-          <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
+          <Text style={styles.saveButtonText}>Confirm</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -353,8 +374,9 @@ export default function ShiftManager({ shifts, onShiftUpdate }: ShiftManagerProp
                       ...editingShift,
                       [showTimePicker === 'start' ? 'startTime' : 'endTime']: timeStr
                     });
-                    setShowTimePicker(null);
                   }}
+                  onConfirm={() => setShowTimePicker(null)}
+                  onCancel={() => setShowTimePicker(null)}
                 />
               )}
             </View>
@@ -648,5 +670,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#666',
+  },
+  timePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 16,
+  },
+  button: {
+    padding: 8,
+    borderRadius: 4,
   },
 }); 

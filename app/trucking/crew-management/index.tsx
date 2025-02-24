@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Text } from '@/components/Themed';
 import MainLayout from '@/components/MainLayout';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,7 +10,12 @@ import RosterCalendar from './components/RosterCalendar';
 import ShiftManager from './components/ShiftManager';
 import AddTeamModal from './components/AddTeamModal';
 import AddMemberModal from './components/AddMemberModal';
-import { CrewMember, Shift, RosterEntry, Team } from './types';
+import PDALoginModal from './components/PDALoginModal';
+import AddMethodModal from './components/AddMethodModal';
+import { CrewMember, Shift, RosterEntry, Team, TeamRoster, ShiftType, LeaveType } from './types';
+import * as FileSystem from 'expo-file-system';
+import PersonalRosterCalendar from './components/PersonalRosterCalendar';
+import TeamRosterPlanning from './components/TeamRosterPlanning';
 
 // 示例數據
 const SAMPLE_CREW_MEMBERS: CrewMember[] = [
@@ -18,11 +23,11 @@ const SAMPLE_CREW_MEMBERS: CrewMember[] = [
     id: '1',
     staffId: 'CR001',
     name: 'John Doe',
-    type: 'Leader',
+    type: 'Senior Crew Leader',
     phone: '+852 9123 4567',
     email: 'john.doe@example.com',
     joinedDate: '2023-01-15',
-    isArmoredCertified: true,
+    isGunCertified: true,
     status: 'Active',
     skills: ['Team Management', 'Route Planning'],
     documents: [
@@ -31,7 +36,11 @@ const SAMPLE_CREW_MEMBERS: CrewMember[] = [
         number: 'L123456',
         expiryDate: '2024-12-31'
       }
-    ]
+    ],
+    pdaLogin: {
+      username: 'john.doe',
+      password: 'password123'
+    }
   },
   {
     id: '2',
@@ -41,7 +50,7 @@ const SAMPLE_CREW_MEMBERS: CrewMember[] = [
     phone: '+852 9876 5432',
     email: 'jane.smith@example.com',
     joinedDate: '2023-02-20',
-    isArmoredCertified: false,
+    isGunCertified: false,
     status: 'Active',
     skills: ['Heavy Vehicle', 'City Navigation'],
     documents: [
@@ -60,7 +69,7 @@ const SAMPLE_CREW_MEMBERS: CrewMember[] = [
     phone: '+852 9999 8888',
     email: 'mike.j@example.com',
     joinedDate: '2023-03-10',
-    isArmoredCertified: true,
+    isGunCertified: true,
     status: 'On Leave',
     skills: ['Security', 'First Aid'],
     documents: [
@@ -73,33 +82,42 @@ const SAMPLE_CREW_MEMBERS: CrewMember[] = [
   }
 ];
 
-// 添加示例排班數據
+// 更新示例排班数据
 const SAMPLE_ROSTER: RosterEntry[] = [
   {
+    id: 're-1',
     date: '2024-03-01',
     crewMemberId: '1',
-    shiftId: 'day',
-    status: 'Scheduled'
+    shiftId: 'early',
+    status: 'Scheduled',
+    source: 'Individual',
+    createdAt: '2024-03-01T00:00:00Z'
   },
   {
+    id: 're-2',
     date: '2024-03-02',
     crewMemberId: '2',
     shiftId: 'normal',
-    status: 'Scheduled'
+    status: 'Scheduled',
+    source: 'Individual',
+    createdAt: '2024-03-01T00:00:00Z'
   },
   {
+    id: 're-3',
     date: '2024-03-03',
     crewMemberId: '3',
     shiftId: 'night',
-    status: 'Scheduled'
+    status: 'Scheduled',
+    source: 'Individual',
+    createdAt: '2024-03-01T00:00:00Z'
   }
 ];
 
-// 更新 SAMPLE_SHIFTS 以包含 capacity
+// 确保 SAMPLE_SHIFTS 的 id 匹配
 const SAMPLE_SHIFTS: Shift[] = [
   {
-    id: 'day',
-    type: 'Day',
+    id: 'early',
+    type: 'Early',
     startTime: '07:00',
     endTime: '15:00',
     color: '#E3F2FD',
@@ -130,7 +148,7 @@ const SAMPLE_TEAMS: Team[] = [
     name: 'Team Alpha',
     driver: SAMPLE_CREW_MEMBERS[1],
     leader: SAMPLE_CREW_MEMBERS[0],
-    guard: SAMPLE_CREW_MEMBERS[2],
+    guards: [SAMPLE_CREW_MEMBERS[2]],
     defaultTruckId: 'TRK-001',
     status: 'Active',
     createdAt: '2024-03-01'
@@ -140,7 +158,7 @@ const SAMPLE_TEAMS: Team[] = [
     name: 'Team Beta',
     driver: null,
     leader: null,
-    guard: null,
+    guards: [],
     status: 'Inactive',
     createdAt: '2024-03-02'
   }
@@ -157,6 +175,19 @@ export default function CrewManagementScreen() {
   const [crewMembers, setCrewMembers] = useState<CrewMember[]>(SAMPLE_CREW_MEMBERS);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddTeam, setShowAddTeam] = useState(false);
+  const [editingMember, setEditingMember] = useState<CrewMember | null>(null);
+  const [showPDALogin, setShowPDALogin] = useState(false);
+  const [editingPDALogin, setEditingPDALogin] = useState<CrewMember | null>(null);
+  const [showAddMethod, setShowAddMethod] = useState(false);
+  const [teamRoster, setTeamRoster] = useState<TeamRoster[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [roster, setRoster] = useState<RosterEntry[]>(SAMPLE_ROSTER.map(r => ({
+    ...r,
+    id: `re-${Date.now()}-${Math.random()}`,
+    source: 'Individual',
+    createdAt: new Date().toISOString()
+  })));
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
 
   const handleSelectMember = (member: CrewMember) => {
     setSelectedMemberId(member.id);
@@ -180,23 +211,260 @@ export default function CrewManagementScreen() {
   };
 
   const handleAddMember = () => {
+    setShowAddMethod(true);
+  };
+
+  const handleEditMember = (member: CrewMember) => {
+    setEditingMember(member);
     setShowAddMember(true);
+    setShowMemberDetails(false);
   };
 
   const handleSaveMember = (memberData: Omit<CrewMember, 'id'>) => {
-    const newMember: CrewMember = {
-      ...memberData,
-      id: `member-${Date.now()}`
-    };
-    setCrewMembers(prev => [...prev, newMember]);
+    if (editingMember) {
+      setCrewMembers(prev => prev.map(member => 
+        member.id === editingMember.id 
+          ? { ...memberData, id: editingMember.id }
+          : member
+      ));
+      setEditingMember(null);
+    } else {
+      const newMember: CrewMember = {
+        ...memberData,
+        id: `member-${Date.now()}`
+      };
+      setCrewMembers(prev => [...prev, newMember]);
+    }
+    setShowAddMember(false);
   };
 
   const handleSelectTeam = (team: Team) => {
-    // TODO: Implement team details modal
-    console.log('Selected team:', team.id);
+    setSelectedTeamId(team.id);
+    setSelectedTeam(team);
+  };
+
+  const handlePDALoginSave = (pdaLoginData: { username: string; password: string }) => {
+    if (editingPDALogin) {
+      setCrewMembers(prev => prev.map(member => 
+        member.id === editingPDALogin.id 
+          ? { ...member, pdaLogin: pdaLoginData }
+          : member
+      ));
+    }
+    setShowPDALogin(false);
+    setEditingPDALogin(null);
+  };
+
+  const handleBulkCreate = async (fileContent: string) => {
+    try {
+      // 跳过注释行（以 # 开头的行）
+      const rows = fileContent.split('\n')
+        .filter(row => row.trim() && !row.startsWith('#'));
+      const headers = rows[0].split(',');
+      
+      const newMembers = rows.slice(1).map(row => {
+        // 使用正则表达式分割，保留引号内的逗号
+        const values = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g) || [];
+        // 清理引号
+        const cleanValues = values.map(v => v.replace(/^"|"$/g, ''));
+
+        // 处理多个文档
+        const docTypes = cleanValues[8].split(',').map(s => s.trim());
+        const docNumbers = cleanValues[9].split(',').map(s => s.trim());
+        const docExpiries = cleanValues[10].split(',').map(s => s.trim());
+
+        // 创建文档数组
+        const documents = docTypes.map((type, index) => ({
+          type,
+          number: docNumbers[index],
+          expiryDate: docExpiries[index]
+        }));
+
+        return {
+          id: `member-${Date.now()}-${Math.random()}`,
+          staffId: cleanValues[0],
+          name: cleanValues[1],
+          type: cleanValues[2] as CrewMember['type'],
+          phone: cleanValues[3],
+          email: cleanValues[4],
+          joinedDate: cleanValues[5],
+          isGunCertified: cleanValues[6].toUpperCase() === 'YES',
+          skills: cleanValues[7].split(',').map(s => s.trim()),
+          status: 'Active',
+          documents,
+          pdaLogin: {
+            username: cleanValues[11],
+            password: cleanValues[12]
+          }
+        } as CrewMember;
+      });
+
+      setCrewMembers(prev => [...prev, ...newMembers]);
+      setShowAddMethod(false);
+      Alert.alert('Success', `Successfully imported ${newMembers.length} crew members`);
+    } catch (error) {
+      console.error('Error processing file content:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to process file content. Please check if the file follows the template format.'
+      );
+    }
+  };
+
+  const handleUpdateTeam = (updatedTeam: Team) => {
+    setTeams(prev => prev.map(team => 
+      team.id === updatedTeam.id ? updatedTeam : team
+    ));
+  };
+
+  const handleDeleteTeam = (teamId: string) => {
+    setTeams(prev => prev.filter(team => team.id !== teamId));
   };
 
   const selectedMember = crewMembers.find(member => member.id === selectedMemberId);
+
+  const handleAddTeamShifts = (teamId: string, dates: string[], shift: ShiftType) => {
+    // 1. 创建团队排班
+    const newTeamRosters = dates.map(date => ({
+      id: `tr-${Date.now()}-${Math.random()}`,
+      teamId,
+      date,
+      shift,
+      status: 'Scheduled',
+      createdAt: new Date().toISOString()
+    }));
+
+    setTeamRoster(prev => [...prev, ...newTeamRosters]);
+
+    // 2. 为团队成员创建个人排班
+    const team = teams.find(t => t.id === teamId);
+    if (team) {
+      const members = [
+        team.leader,
+        team.driver,
+        ...team.guards
+      ].filter((member): member is CrewMember => member !== null);
+
+      const newPersonalRosters = dates.flatMap(date => 
+        members.map(member => ({
+          id: `r-${Date.now()}-${Math.random()}`,
+          date,
+          crewMemberId: member.id,
+          teamId,
+          shiftId: shift.toLowerCase(),
+          status: 'Scheduled',
+          source: 'Team',
+          createdAt: new Date().toISOString()
+        }))
+      );
+
+      setRoster(prev => [...prev, ...newPersonalRosters]);
+    }
+  };
+
+  const handleRemoveTeamShift = (rosterId: string) => {
+    // 1. 删除团队排班
+    setTeamRoster(prev => prev.filter(tr => tr.id !== rosterId));
+
+    // 2. 删除相关的个人排班
+    const teamRosterEntry = teamRoster.find(tr => tr.id === rosterId);
+    if (teamRosterEntry) {
+      setRoster(prev => prev.filter(r => 
+        !(r.teamId === teamRosterEntry.teamId && r.date === teamRosterEntry.date)
+      ));
+    }
+  };
+
+  const handleAddLeave = (crewMemberId: string, date: string, leaveType: LeaveType) => {
+    const newLeave: RosterEntry = {
+      id: `leave-${Date.now()}-${Math.random()}`,
+      date,
+      crewMemberId,
+      leaveType,
+      status: 'Leave',
+      source: 'Leave',
+      createdAt: new Date().toISOString()
+    };
+
+    setRoster(prev => [...prev, newLeave]);
+  };
+
+  const handleRemoveLeave = (rosterId: string) => {
+    setRoster(prev => prev.filter(r => r.id !== rosterId));
+  };
+
+  const handleUpdateTeamDay = (
+    teamId: string,
+    date: string,
+    updates: {
+      leaderId?: string;
+      driverId?: string;
+      guardIds?: string[];
+    }
+  ) => {
+    setTeams(prev => prev.map(team => {
+      if (team.id !== teamId) return team;
+
+      const updatedTeam = { ...team };
+      if (updates.leaderId) {
+        updatedTeam.leader = crewMembers.find(m => m.id === updates.leaderId) || null;
+      }
+      if (updates.driverId) {
+        updatedTeam.driver = crewMembers.find(m => m.id === updates.driverId) || null;
+      }
+      if (updates.guardIds) {
+        updatedTeam.guards = updates.guardIds
+          .map(id => crewMembers.find(m => m.id === id))
+          .filter((member): member is CrewMember => member !== null);
+      }
+      return updatedTeam;
+    }));
+  };
+
+  const renderRightPanel = () => {
+    if (activeTab === 'crew' && selectedMember) {
+      return (
+        <PersonalRosterCalendar
+          member={selectedMember}
+          roster={roster.filter(r => r.crewMemberId === selectedMember.id)}
+          shifts={shifts}
+          teams={teams}
+          onAddLeave={(date, leaveType) => handleAddLeave(selectedMember.id, date, leaveType)}
+          onRemoveLeave={handleRemoveLeave}
+        />
+      );
+    }
+
+    if (activeTab === 'team' && selectedTeam) {
+      // 获取团队所有成员的 ID
+      const teamMemberIds = [
+        selectedTeam.leader?.id,
+        selectedTeam.driver?.id,
+        ...selectedTeam.guards.map(g => g.id)
+      ].filter((id): id is string => id !== undefined);
+
+      // 获取这些成员的请假记录
+      const teamMemberLeaves = roster.filter(r => 
+        teamMemberIds.includes(r.crewMemberId) && 
+        r.leaveType && 
+        r.source === 'Leave'
+      );
+
+      return (
+        <TeamRosterPlanning
+          team={selectedTeam}
+          teamRoster={teamRoster.filter(tr => tr.teamId === selectedTeam.id)}
+          memberLeaves={teamMemberLeaves}
+          availableMembers={crewMembers}
+          onAddShifts={(dates, shift) => handleAddTeamShifts(selectedTeam.id, dates, shift)}
+          onRemoveShift={handleRemoveTeamShift}
+          onUpdateTeamDay={(date, updates) => handleUpdateTeamDay(selectedTeam.id, date, updates)}
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
     <MainLayout
@@ -212,11 +480,34 @@ export default function CrewManagementScreen() {
             onPress={handleAddMember}
           >
             <MaterialCommunityIcons name="account-plus" size={20} color="#1976D2" />
-            <Text style={styles.toolbarButtonText}>Add Member</Text>
+            <Text style={styles.toolbarButtonText}>Add Crew</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.toolbarButton}
-            onPress={() => setShowShiftManager(!showShiftManager)}
+            onPress={handleAddTeam}
+          >
+            <MaterialCommunityIcons name="account-multiple-plus" size={20} color="#1976D2" />
+            <Text style={styles.toolbarButtonText}>Add Team</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.toolbarButton}
+            onPress={() => setShowShiftManager(false)}
+          >
+            <MaterialCommunityIcons 
+              name="calendar-month" 
+              size={20} 
+              color={!showShiftManager ? '#1976D2' : '#666'} 
+            />
+            <Text style={[
+              styles.toolbarButtonText,
+              !showShiftManager && styles.toolbarButtonTextActive
+            ]}>
+              Roster Calendar
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.toolbarButton}
+            onPress={() => setShowShiftManager(true)}
           >
             <MaterialCommunityIcons 
               name="clock-edit" 
@@ -281,37 +572,27 @@ export default function CrewManagementScreen() {
                   setSelectedMemberId(member.id);
                   setShowMemberDetails(true);
                 }}
+                onShowPDALogin={(member) => {
+                  setEditingPDALogin(member);
+                  setShowPDALogin(true);
+                }}
               />
             ) : (
               <TeamList
                 teams={teams}
-                onAddTeam={handleAddTeam}
+                selectedTeamId={selectedTeamId}
                 onSelectTeam={handleSelectTeam}
+                onUpdateTeam={handleUpdateTeam}
+                onDeleteTeam={handleDeleteTeam}
+                availableMembers={crewMembers}
+                teamRoster={teamRoster}
               />
             )}
           </View>
 
           {/* Right Panel - Calendar or Shift Management */}
           <View style={[styles.rightPanel, { flex: 1 }]}>
-            {showShiftManager ? (
-              <ShiftManager
-                shifts={shifts}
-                onShiftUpdate={handleShiftUpdate}
-              />
-            ) : (
-              <>
-                <View style={styles.panelHeader}>
-                  <MaterialCommunityIcons name="calendar-month" size={20} color="#1976D2" />
-                  <Text style={styles.panelTitle}>Roster Calendar</Text>
-                </View>
-                <RosterCalendar
-                  roster={SAMPLE_ROSTER}
-                  shifts={shifts}
-                  onDateSelect={(date) => setSelectedDate(date)}
-                  selectedDate={selectedDate || undefined}
-                />
-              </>
-            )}
+            {renderRightPanel()}
           </View>
 
           {/* Member Details Modal */}
@@ -333,20 +614,26 @@ export default function CrewManagementScreen() {
                   </TouchableOpacity>
                 </View>
                 <CrewDetails 
-                  member={selectedMember || null} 
+                  member={selectedMember} 
                   onEdit={() => {
-                    console.log('Edit member:', selectedMember?.id);
+                    if (selectedMember) {
+                      handleEditMember(selectedMember);
+                    }
                   }}
                 />
               </View>
             </View>
           </Modal>
 
-          {/* Add Member Modal */}
+          {/* Add/Edit Member Modal */}
           <AddMemberModal
             visible={showAddMember}
-            onClose={() => setShowAddMember(false)}
+            onClose={() => {
+              setShowAddMember(false);
+              setEditingMember(null);
+            }}
             onSave={handleSaveMember}
+            initialData={editingMember}
           />
 
           {/* Add Team Modal */}
@@ -355,6 +642,27 @@ export default function CrewManagementScreen() {
             onClose={() => setShowAddTeam(false)}
             onSave={handleSaveTeam}
             availableMembers={crewMembers}
+          />
+
+          {/* PDALogin Modal */}
+          <PDALoginModal
+            visible={showPDALogin}
+            onClose={() => {
+              setShowPDALogin(false);
+              setEditingPDALogin(null);
+            }}
+            onSave={handlePDALoginSave}
+            initialData={editingPDALogin?.pdaLogin}
+          />
+
+          <AddMethodModal
+            visible={showAddMethod}
+            onClose={() => setShowAddMethod(false)}
+            onSelectManual={() => {
+              setShowAddMethod(false);
+              setShowAddMember(true);
+            }}
+            onBulkCreate={handleBulkCreate}
           />
         </View>
       </View>
